@@ -1,18 +1,31 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 )
 
 func main() {
+	port := os.Getenv("PORT")
+	bootstrapServers := os.Getenv("BOOTSTRAP_SERVERS")
+
+	if port == "" {
+		port = "3000"
+	}
+
+	if bootstrapServers == "" {
+		bootstrapServers = "localhost:29092,localhost:39092,localhost:49092"
+	} else {
+		bootstrapServers = os.Getenv("BOOTSTRAP_SERVERS")
+	}
+
 	p, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": "localhost:39092,localhost:49092,localhost:29092",
+		"bootstrap.servers": bootstrapServers,
 		"client.id":         "myProducer",
 		"acks":              "all"})
 
@@ -64,11 +77,8 @@ func main() {
 
 	})
 
-	port := flag.String("port", "8080", "port to listen on")
-	flag.Parse()
-
-	log.Printf("Listening on port %s", *port)
-	if err := http.ListenAndServe(fmt.Sprintf(":%s", *port), nil); err != nil {
+	log.Printf("Listening on port :%s", port)
+	if err := http.ListenAndServe(fmt.Sprintf(":%s", port), nil); err != nil {
 		log.Fatal(err)
 	}
 }
