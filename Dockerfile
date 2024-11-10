@@ -9,6 +9,10 @@ ARG USER=nouser
 
 WORKDIR /app
 
+# RUN apk add --no-cache librdkafka-dev \
+#     && apk add --no-cache make \
+#     && apk add --no-cache sudo
+
 COPY go.mod go.sum ./
 
 RUN go mod download
@@ -19,7 +23,7 @@ RUN make build
 
 
 # Stage 2: Final stage
-FROM alpine AS build-stage
+FROM golang:1.23.1 AS build-stage
 
 ARG USER=nouser
 
@@ -27,12 +31,12 @@ WORKDIR /
 
 COPY --from=builder /app/bin/eventstore /eventstore
 
-RUN adduser -D $USER \
-    && mkdir -p /etc/sudoers.d \
-    && echo "$USER ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/$USER \
-    && chmod 0440 /etc/sudoers.d/$USER
+# RUN adduser -D $USER \
+#     && mkdir -p /etc/sudoers.d \
+#     && echo "$USER ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/$USER \
+#     && chmod 0440 /etc/sudoers.d/$USER
 
-USER $USER
+# USER $USER
 
 EXPOSE 3000
 

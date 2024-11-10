@@ -3,10 +3,10 @@
 all: build
 
 build:
-	@go build -o bin/eventstore *.go 
+	@go build -o bin/eventstore ./... 
 
 run: build
-	@./bin/eventst
+	@./bin/eventstore
 
 clean:
 	@rm -rf bin
@@ -15,7 +15,7 @@ watch:
 	@air -c .air.toml
 
 docker-build:
-	@docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/papawattu/cleanlog-eventstore:latest .
+	@docker buildx build --platform linux/amd64 -t ghcr.io/papawattu/cleanlog-eventstore:latest .
 
 docker-push: docker-build
 	@docker push ghcr.io/papawattu/cleanlog-eventstore:latest
