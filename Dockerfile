@@ -1,6 +1,6 @@
 # Use a multi-stage build to support multiple architectures
 # Stage 1: Build stage
-FROM golang:1.23.1-alpine AS builder
+FROM golang:1.23.1 AS builder
 LABEL org.opencontainers.image.source=https://github.com/papawattu/cleanlog-eventstore
 LABEL org.opencontainers.image.description="A simple web app log cleaning house"
 LABEL org.opencontainers.image.licenses=MIT
@@ -9,9 +9,7 @@ ARG USER=nouser
 
 WORKDIR /app
 
-RUN apk add --no-cache librdkafka-dev \
-    && apk add --no-cache make \
-    && apk add --no-cache sudo
+RUN apt update && apt install -y librdkafka-dev
 
 COPY go.mod go.sum ./
 
@@ -23,7 +21,7 @@ RUN make build
 
 
 # Stage 2: Final stage
-FROM alpine:latest AS build-stage
+FROM debian AS build-stage
 
 ARG USER=nouser
 
@@ -31,7 +29,7 @@ WORKDIR /
 
 COPY --from=builder /app/bin/eventstore /eventstore
 
-RUN adduser -D $USER \
+RUN adduser $USER \
     && mkdir -p /etc/sudoers.d \
     && echo "$USER ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/$USER \
     && chmod 0440 /etc/sudoers.d/$USER
