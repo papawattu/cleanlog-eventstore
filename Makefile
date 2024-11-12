@@ -3,7 +3,7 @@
 all: build
 
 build:
-	@go build -o bin/eventstore ./... 
+	@go build -o bin/eventstore ./*.go
 
 run: build
 	@./bin/eventstore
