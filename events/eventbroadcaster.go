@@ -11,20 +11,19 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/papawattu/cleanlog-eventstore/repository"
+	repo "github.com/papawattu/cleanlog-eventstore/repository"
 	utils "github.com/papawattu/cleanlog-eventstore/utils"
 )
 
 const (
 	Created      = "Created"
 	Deleted      = "Deleted"
-	Updated      = "Updated"
 	EventUri     = "/event"
 	EventVersion = 1
 )
 
 type EventBroadcaster[T any, S comparable] struct {
-	repo            repository.Repository[T, S]
+	repo            repo.Repository[T, S]
 	broadcastUri    string
 	eventTypePrefix string
 }
@@ -43,6 +42,14 @@ func (eb *EventBroadcaster[T, S]) postEvent(event Event) error {
 	if err != nil {
 		return err
 	}
+
+	h := sha256.New()
+
+	h.Write([]byte(ev))
+
+	event.EventSHA = fmt.Sprintf("%x", h.Sum(nil))
+
+	ev, err = json.Marshal(event)
 
 	client := utils.NewRetryableClient(10)
 
@@ -69,47 +76,22 @@ func (eb *EventBroadcaster[T, S]) postEvent(event Event) error {
 
 func (eb *EventBroadcaster[T, S]) Save(ctx context.Context, e T) error {
 
-	var evt string
-
-	id, err := eb.repo.GetId(ctx, e)
-
-	if err != nil {
-		return err
-	}
-
-	ok, err := eb.repo.Exists(ctx, id)
-
-	if err != nil {
-		return err
-	}
-
-	if ok {
-		slog.Info("Work log already exists", "ID", id)
-		evt = eb.eventTypePrefix + Updated
-
-	} else {
-		slog.Info("Work log created", "ID", id, "Event", evt)
-		evt = eb.eventTypePrefix + Created
-	}
+	slog.Info("EventBroadcaster", "Save", e)
 	ent, err := json.Marshal(e)
 
 	if err != nil {
 		return err
 	}
 
-	h := sha256.New()
-
-	h.Write([]byte(ent))
-
 	// Broadcast event
 	event := Event{
-		EventType:    evt,
+		EventType:    eb.eventTypePrefix + Created,
 		EventTime:    time.Now(),
 		EventVersion: EventVersion,
-		EventSHA:     fmt.Sprintf("%x", h.Sum(nil)),
 		EventData:    string(ent),
 	}
 
+	slog.Info("EventBroadcaster", "Save", event.EventData)
 	err = eb.postEvent(event)
 
 	if err != nil {
@@ -147,16 +129,11 @@ func (eb *EventBroadcaster[T, S]) Delete(ctx context.Context, e T) error {
 		return err
 	}
 
-	h := sha256.New()
-
-	h.Write([]byte(wlj))
-
 	// Broadcast event
 	event := Event{
 		EventType:    eb.eventTypePrefix + Deleted,
 		EventTime:    time.Now(),
 		EventVersion: EventVersion,
-		EventSHA:     fmt.Sprintf("%x", h.Sum(nil)),
 		EventData:    string(wlj),
 	}
 
@@ -169,13 +146,7 @@ func (eb *EventBroadcaster[T, S]) Delete(ctx context.Context, e T) error {
 	return nil // eb.repo.DeleteWorkLog(id)
 }
 
-func (eb *EventBroadcaster[T, S]) Exists(ctx context.Context, id S) (bool, error) {
-	return eb.repo.Exists(ctx, id)
-}
-func (eb *EventBroadcaster[T, S]) GetId(ctx context.Context, e T) (S, error) {
-	return eb.repo.GetId(ctx, e)
-}
-func NewEventBroadcaster[T any, S comparable](ctx context.Context, repo repository.Repository[T, S], broadcastUri string, streamUri, topic string, eventTypePrefix string) *EventBroadcaster[T, S] {
+func NewEventBroadcaster[T any, S comparable](ctx context.Context, repo repo.Repository[T, S], broadcastUri string, streamUri, topic string, eventTypePrefix string) *EventBroadcaster[T, S] {
 
 	es := make(chan string)
 
@@ -220,13 +191,6 @@ func NewEventBroadcaster[T any, S comparable](ctx context.Context, repo reposito
 
 				if err != nil {
 					log.Printf("Error deleting work log: %v", err)
-				}
-			case eventTypePrefix + Updated:
-				wl := decodeEntity[T](event.EventData)
-				err := repo.Save(ctx, wl)
-
-				if err != nil {
-					log.Printf("Error updating work log: %v", err)
 				}
 			}
 		}
