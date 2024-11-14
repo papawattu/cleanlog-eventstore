@@ -18,6 +18,7 @@ import (
 const (
 	Created      = "Created"
 	Deleted      = "Deleted"
+	Updated      = "Updated"
 	EventUri     = "/event"
 	EventVersion = 1
 )
@@ -51,6 +52,10 @@ func (eb *EventBroadcaster[T, S]) postEvent(event Event) error {
 
 	ev, err = json.Marshal(event)
 
+	if err != nil {
+		return err
+	}
+
 	client := utils.NewRetryableClient(10)
 
 	r, err := http.NewRequest("POST", eb.broadcastUri, bytes.NewBuffer(ev))
@@ -74,7 +79,7 @@ func (eb *EventBroadcaster[T, S]) postEvent(event Event) error {
 	return nil
 }
 
-func (eb *EventBroadcaster[T, S]) Save(ctx context.Context, e T) error {
+func (eb *EventBroadcaster[T, S]) Create(ctx context.Context, e T) error {
 
 	slog.Info("EventBroadcaster", "Save", e)
 	ent, err := json.Marshal(e)
@@ -91,26 +96,47 @@ func (eb *EventBroadcaster[T, S]) Save(ctx context.Context, e T) error {
 		EventData:    string(ent),
 	}
 
-	slog.Info("EventBroadcaster", "Save", event.EventData)
+	slog.Info("EventBroadcaster", "Create", event.EventData)
 	err = eb.postEvent(event)
+
+	if err != nil {
+		slog.Error("Error broadcasting event", "error", err)
+		return err
+	}
+
+	slog.Info("EventBroadcaster", "Create", "Event published")
+
+	return nil
+}
+
+func (eb *EventBroadcaster[T, S]) Save(ctx context.Context, e T) error {
+
+	slog.Info("EventBroadcaster", "Save", e)
+	ent, err := json.Marshal(e)
 
 	if err != nil {
 		return err
 	}
 
-	// err = eb.repo.SaveWorkLog(wl)
+	// Broadcast event
+	event := Event{
+		EventType:    eb.eventTypePrefix + Updated,
+		EventTime:    time.Now(),
+		EventVersion: EventVersion,
+		EventData:    string(ent),
+	}
 
-	// if err != nil {
+	slog.Info("EventBroadcaster", "Save", event.EventData)
+	err = eb.postEvent(event)
 
-	// 	err := eb.DeleteWorkLog(*wl.WorkLogID)
-	// 	if err != nil {
-	// 		log.Panicf("Error saving work log: %v published rollback event", err)
-	// 	}
-	// 	log.Printf("Error saving work log: %v published rollback event", err)
-	// 	return err
-	// }
+	if err != nil {
+		slog.Error("Error broadcasting event", "error", err)
+		return err
+	}
 
-	return nil //
+	slog.Info("EventBroadcaster", "Save", "Event published")
+
+	return nil
 }
 
 func (eb *EventBroadcaster[T, S]) Get(ctx context.Context, id S) (T, error) {
@@ -180,7 +206,7 @@ func NewEventBroadcaster[T any, S comparable](ctx context.Context, repo repo.Rep
 			case eventTypePrefix + Created:
 				log.Printf("Received work log created event %v", event.EventData)
 				wl := decodeEntity[T](event.EventData)
-				err := repo.Save(ctx, wl)
+				err := repo.Create(ctx, wl)
 				log.Printf("Saved work log %v", wl)
 				if err != nil {
 					log.Printf("Error saving work log: %v", err)
@@ -192,6 +218,14 @@ func NewEventBroadcaster[T any, S comparable](ctx context.Context, repo repo.Rep
 				if err != nil {
 					log.Printf("Error deleting work log: %v", err)
 				}
+			case eventTypePrefix + Updated:
+				wl := decodeEntity[T](event.EventData)
+				err := repo.Save(ctx, wl)
+				if err != nil {
+					log.Printf("Error updating work log: %v", err)
+				}
+			default:
+				log.Printf("Unknown event type: %s", event.EventType)
 			}
 		}
 
