@@ -176,6 +176,10 @@ func (eb *EventBroadcaster[T, S]) Exists(ctx context.Context, id S) (bool, error
 	return eb.repo.Exists(ctx, id)
 }
 
+func (eb *EventBroadcaster[T, S]) GetId(ctx context.Context, e T) (S, error) {
+	return eb.repo.GetId(ctx, e)
+}
+
 func NewEventBroadcaster[T any, S comparable](ctx context.Context, repo repo.Repository[T, S], broadcastUri string, streamUri, topic string, eventTypePrefix string) *EventBroadcaster[T, S] {
 
 	es := make(chan string)
